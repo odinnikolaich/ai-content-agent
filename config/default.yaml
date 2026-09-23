@@ -1,0 +1,27 @@
+agent_mode: mock
+log_level: INFO
+workspace_dir: workspace
+output_dir: output
+temp_dir: .tmp
+video:
+  language: ru
+  aspect_ratio: "9:16"
+  width: 1080
+  height: 1920
+  fps: 30
+  min_duration_seconds: 43
+  max_duration_seconds: 60
+reliability:
+  provider_timeout_seconds: 120
+  retry_count: 2
+quality:
+  min_width: 720
+  min_height: 1280
+  min_duration_seconds: 43
+  max_duration_seconds: 60
+providers:
+  llm: mock
+  image: mock
+  video: mock
+  voice: mock
+  transcription: mock

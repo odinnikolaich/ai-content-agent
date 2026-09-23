@@ -1,22 +1,31 @@
 # Provider Architecture
 
-Core interfaces:
+Core provider/infrastructure interfaces are defined in `src/core/interfaces.py`.
 
-- LLMProvider
-- ImageProvider
-- VideoProvider
-- VoiceProvider
-- TranscriptionProvider
-- StorageProvider
-- MediaInspector
-- Renderer
+## Interfaces
 
-Provider policy:
+- `LLMProvider`
+- `ImageProvider`
+- `VideoProvider`
+- `VisualProvider`
+- `VoiceProvider`
+- `TranscriptionProvider`
+- `StorageProvider`
+- `MediaInspector`
+- `Renderer`
+- `ResearchProvider`
+- `CaptionRenderer`
 
-- Mock providers are mandatory for testability.
-- Local providers are optional implementations for free/local execution where hardware permits.
+## Policy
+
+- Mock providers are mandatory for end-to-end testing.
+- Local providers are optional and should be selected according to available hardware.
 - Remote providers are optional adapters.
 - Paid services are never mandatory project dependencies.
-- Agents depend on interfaces, not vendor implementations.
+- Agents depend on protocols/interfaces, not vendor implementations.
+- No vendor SDK is imported by the domain model layer.
+- Provider-specific parameters are carried only through provider request contracts.
 
-Examples of future implementations may include local or remote models, but the architecture does not select a vendor at PHASE 0.
+The architecture intentionally does not select OpenAI, ElevenLabs, Runway,
+LongCat, or another vendor at PHASE 0.1. Concrete providers are a later
+implementation decision.

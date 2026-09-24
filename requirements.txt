@@ -2,3 +2,5 @@ edge-tts>=7.2.1
 Pillow>=10.0
 imageio-ffmpeg>=0.5.1
 PyYAML>=6.0
+python-dotenv>=1.0
+python-telegram-bot>=22.0,<23

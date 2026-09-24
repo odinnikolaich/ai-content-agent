@@ -15,12 +15,14 @@ from providers.real.edge_tts_voice import EdgeTTSVoiceProvider
 from providers.real.pollinations_image import PollinationsImageProvider
 from providers.real.ollama_planner import OllamaPlanner
 
+
 def audio_duration(ffmpeg: str, path: Path) -> float:
     r = subprocess.run([ffmpeg, "-hide_banner", "-i", str(path)], text=True, capture_output=True)
     m = re.search(r"Duration: (\d+):(\d+):(\d+(?:\.\d+)?)", r.stderr)
     if not m:
         raise RuntimeError("Could not determine generated speech duration")
     return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+
 
 def caption_segments(text: str, actual: float) -> list[dict[str, float | str]]:
     sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()] or [text.strip()]
@@ -33,6 +35,7 @@ def caption_segments(text: str, actual: float) -> list[dict[str, float | str]]:
         captions.append({"start": round(cursor, 3), "end": round(end, 3), "text": sentence})
         cursor = end
     return captions
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Universal prompt-to-video pipeline")
@@ -74,7 +77,7 @@ def main() -> None:
         scene = plan.scenes[index - 1]
         assets.append({
             "title": scene.on_screen_text,
-            "image": filename,
+            "image": f"{request.project_id}/{filename}",
             "start": scene.start_seconds,
             "end": scene.end_seconds,
         })
@@ -89,7 +92,9 @@ def main() -> None:
         raise RuntimeError(f"Generated speech duration is {actual:.2f}s; required range is 43–60s.")
 
     captions = caption_segments(narration, actual)
-    manifest = manifest_for(script, plan, request, assets, "voice_ru.mp3", captions, actual)
+    manifest = manifest_for(
+        script, plan, request, assets, f"{request.project_id}/voice_ru.mp3", captions, actual
+    )
     (public / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     output = root / "output" / f"{request.project_id}.mp4"
@@ -102,6 +107,7 @@ def main() -> None:
     print(f"VIDEO_READY={output}")
     print(f"SPEECH_DURATION={actual:.2f}")
     print(f"PLAN={work / 'plan.json'}")
+
 
 if __name__ == "__main__":
     main()

@@ -18,6 +18,8 @@ class OllamaPlanner:
         self.model = model or os.getenv("AI_AGENT_LLM_MODEL", "qwen3:0.6b")
         self.base_url = (base_url or os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")).rstrip("/")
         self.timeout = timeout
+        self._last_topic = None
+        self._last_plan = None
 
     def available(self) -> bool:
         try:
@@ -27,6 +29,8 @@ class OllamaPlanner:
             return False
 
     def plan(self, topic: str) -> dict[str, Any]:
+        if self._last_topic == topic and self._last_plan is not None:
+            return self._last_plan
         payload = {"model": self.model, "stream": False, "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Create the complete plan for this request:\n{topic}\nReturn JSON only."},
@@ -39,7 +43,10 @@ class OllamaPlanner:
             result = json.loads(response.read().decode('utf-8'))
         content = result.get("message", {}).get("content", "")
         if not content: raise ValueError("Ollama returned an empty planner response")
-        return self._parse_json(content)
+        value = self._parse_json(content)
+        self._last_topic = topic
+        self._last_plan = value
+        return value
 
     @staticmethod
     def _parse_json(content: str) -> dict[str, Any]:

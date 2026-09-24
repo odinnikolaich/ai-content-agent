@@ -92,7 +92,7 @@ def main() -> None:
     (public/"manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     subprocess.run(
-        ["npm", "run", "render", "--", "RealVertical", str(root/"output"/"real_demo.mp4"),
+        ["npm.cmd", "run", "render", "--", "RealVertical", str(root/"output"/"real_demo.mp4"),
          "--props", json.dumps(manifest, ensure_ascii=False)],
         cwd=root/"remotion", check=True,
     )

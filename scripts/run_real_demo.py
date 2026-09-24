@@ -52,17 +52,17 @@ def main() -> None:
     root = Path(__file__).resolve().parents[1]
     work = root/"workspace"/"projects"/"real-demo"
     public = root/"remotion"/"public"/"assets"/"real-demo"
-    if work.exists():
-        shutil.rmtree(work)
-    if public.exists():
-        shutil.rmtree(public)
+    work.mkdir(parents=True, exist_ok=True)
+    (work/"images").mkdir(parents=True, exist_ok=True)
     public.mkdir(parents=True, exist_ok=True)
 
     images = PollinationsImageProvider(work/"images")
     voice = EdgeTTSVoiceProvider(args.voice)
     assets = []
     for i, (title, visual) in enumerate(SCENES, 1):
-        image = images.generate(f"{visual}. Topic: {args.topic}.", f"scene_{i:02d}.jpg", 1024, 1792, 100+i)
+        image = work/"images"/f"scene_{i:02d}.jpg"
+        if not image.exists():
+            image = images.generate(f"{visual}. Topic: {args.topic}.", f"scene_{i:02d}.jpg", 1024, 1792, 100+i)
         shutil.copy2(image, public/f"scene_{i:02d}.jpg")
         assets.append({"title": title, "image": f"scene_{i:02d}.jpg"})
 

@@ -13,6 +13,7 @@ from core.models import ContentRequest
 from pipeline.universal import build_scene_plan, build_script, build_visual_requests, manifest_for, save_plan
 from providers.real.edge_tts_voice import EdgeTTSVoiceProvider
 from providers.real.pollinations_image import PollinationsImageProvider
+from providers.real.ollama_planner import OllamaPlanner
 
 def audio_duration(ffmpeg: str, path: Path) -> float:
     r = subprocess.run([ffmpeg, "-hide_banner", "-i", str(path)], text=True, capture_output=True)
@@ -38,7 +39,10 @@ def main() -> None:
     parser.add_argument("prompt", help="Any user topic or video request")
     parser.add_argument("--duration", type=int, default=50)
     parser.add_argument("--voice", default=os.getenv("AI_AGENT_VOICE", "ru-RU-DmitryNeural"))
+    parser.add_argument("--llm-model", default=os.getenv("AI_AGENT_LLM_MODEL", "qwen3:0.6b"))
     args = parser.parse_args()
+
+    planner = OllamaPlanner(model=args.llm_model)
 
     request = ContentRequest(
         project_id=f"video-{uuid.uuid4().hex[:10]}",
@@ -52,8 +56,8 @@ def main() -> None:
     (work / "images").mkdir(parents=True, exist_ok=True)
     public.mkdir(parents=True, exist_ok=True)
 
-    script = build_script(request.topic, request.duration_seconds)
-    plan = build_scene_plan(script, request)
+    script = build_script(request.topic, request.duration_seconds, planner)
+    plan = build_scene_plan(script, request, planner)
     save_plan(root, request, script, plan)
     visual_requests = build_visual_requests(plan, request)
 

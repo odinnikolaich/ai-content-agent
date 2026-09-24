@@ -91,8 +91,9 @@ def main() -> None:
     }
     (public/"manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
+    npm_cmd = os.getenv("NPM_CMD") or str(Path(os.getenv("ProgramFiles", "C:/Program Files")) / "nodejs" / "npm.cmd")
     subprocess.run(
-        ["npm.cmd", "run", "render", "--", "RealVertical", str(root/"output"/"real_demo.mp4"),
+        [npm_cmd, "run", "render", "--", "RealVertical", str(root/"output"/"real_demo.mp4"),
          "--props", json.dumps(manifest, ensure_ascii=False)],
         cwd=root/"remotion", check=True,
     )

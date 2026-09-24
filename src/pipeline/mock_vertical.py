@@ -48,7 +48,7 @@ def _render_mp4(work:Path,output:Path,duration:float,fps:int)->None:
     try: import imageio_ffmpeg
     except ImportError as exc: raise RuntimeError("imageio-ffmpeg is required; install with: python -m pip install -e .") from exc
     ffmpeg=imageio_ffmpeg.get_ffmpeg_exe(); cards=sorted(work.glob("scene_*.png")); scene_duration=duration/len(cards); concat=work/"concat.txt"
-    concat.write_text("".join(f"file '{p.as_posix()}'\nduration {scene_duration:.6f}\n" for p in cards)+f"file '{cards[-1].as_posix()}'\n",encoding="utf-8")
+    concat.write_text("".join(f"file '{p.name}'\nduration {scene_duration:.6f}\n" for p in cards)+f"file '{cards[-1].name}'\n",encoding="utf-8")
     cmd=[ffmpeg,"-y","-f","concat","-safe","0","-i",str(concat),"-i",str(work/"voice_mock.wav"),"-r",str(fps),"-t",str(duration),"-vf","format=yuv420p","-c:v","libx264","-preset","veryfast","-crf","27","-c:a","aac","-b:a","96k",str(output)]
     subprocess.run(cmd,check=True,capture_output=True,text=True)
 

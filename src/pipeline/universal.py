@@ -46,7 +46,7 @@ def _build_segments(topic: str, duration: int) -> tuple[ScriptSegment, ...]:
             segment_id=f"seg_{i:02d}",
             narration=text,
             on_screen_text=(t if i == 1 else ""),
-            duration_seconds=round(d, 3),
+            duration_seconds=round(durations[i - 1], 3),
         )
         for i, text in enumerate(templates, 1)
     )

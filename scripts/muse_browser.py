@@ -101,11 +101,10 @@ def run(pack_path: Path, scene_id: str, generate: bool, *, headless: bool = Fals
             viewport={"width": 1366, "height": 900})
         try:
             page = context.pages[0] if context.pages else context.new_page()
-            page.goto(SITE, wait_until="domcontentloaded", timeout=45000)
+            page.goto(SITE.rstrip("/") + "/studio/", wait_until="domcontentloaded", timeout=45000)
             # No automatic clicking through login, consent, billing or unknown menu.
-            # User can navigate to Studio, select Muse AI, and set parameters in
-            # this persistent Chrome window. Operator should re-run preflight.
-            page.wait_for_timeout(3000)
+            # A separate --setup command handles manual authorization.
+            page.wait_for_timeout(2500)
             if not page.url.startswith(SITE):
                 raise RuntimeError("Browser left trusted SnapGen origin")
             editor = get_prompt_field(page)
@@ -161,13 +160,45 @@ def run(pack_path: Path, scene_id: str, generate: bool, *, headless: bool = Fals
             context.close()
 
 
+def setup_profile():
+    """One-time private login window; no passwords enter the chat or script."""
+    from playwright.sync_api import sync_playwright
+    with sync_playwright() as pw:
+        chrome = (Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe")
+                  if sys.platform == "win32" else None)
+        # A clean dedicated profile avoids accessing a user's browser secrets.
+        context = pw.chromium.launch_persistent_context(
+            str(ROOT / "workspace" / "browser_profiles" / "snapgen_muse"),
+            executable_path=str(chrome) if chrome and chrome.is_file() else None,
+            headless=False, viewport={"width": 1366, "height": 900})
+        try:
+            page = context.pages[0] if context.pages else context.new_page()
+            page.goto(SITE, wait_until="domcontentloaded", timeout=45000)
+            print("Log into SnapGen in this Chrome window. When done, press Enter in the terminal.", flush=True)
+            try:
+                input()
+            except EOFError:
+                raise RuntimeError("Interactive login requires an open terminal (not background execution)")
+            print("Browser profile saved. No generation was started.", flush=True)
+        finally:
+            context.close()
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--pack", type=Path, required=True)
-    p.add_argument("--scene", required=True)
+    p.add_argument("--pack", type=Path)
+    p.add_argument("--scene")
     p.add_argument("--generate", action="store_true")
     p.add_argument("--headless", action="store_true")
+    p.add_argument("--setup", action="store_true", help="one-time sign in to isolated Chrome profile")
     args = p.parse_args()
+    if args.setup:
+        if args.generate or args.headless:
+            raise RuntimeError("Login setup must be visible and may not generate")
+        setup_profile()
+        return
+    if not args.pack or not args.scene:
+        p.error("--pack and --scene are required unless --setup is used")
     print(json.dumps(run(args.pack, args.scene, args.generate,
                          headless=args.headless), ensure_ascii=False, indent=2))
 

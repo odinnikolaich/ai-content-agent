@@ -25,7 +25,7 @@
 
 В пакете `prompts` будут промпты на 8 сцен. Строгие требования к меню, разъёмам, подключениям и модельным различиям — *не опциональны*.
 
-Для отдельного браузерного теста можно установить в существующую venv пакеты `playwright` и Chromium (`python -m playwright install chromium`). Войти в SnapGen в отдельном профиле браузера **самостоятельно**, выбрать подходящую модель Muse AI, 9:16, 720p и 6 секунд. Затем:
+Для отдельного браузерного теста можно установить в существующую venv пакеты `playwright` и Chromium (`python -m playwright install chromium`). Один раз открыть собственный профиль браузера командой `python scripts/muse_browser.py --setup`, войти там в SnapGen и нажать Enter в PowerShell. Выбрать подходящую модель Muse AI, 9:16, 720p и 6 секунд. Затем:
 
 ```powershell
 .\.venv\Scripts\python.exe scripts\muse_browser.py --pack workspace\projects\muse_test\muse --scene scene_01

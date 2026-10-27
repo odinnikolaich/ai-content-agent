@@ -73,3 +73,50 @@ def test_invalid_plan_timeline_rejected(tmp_path):
     src.write_text(json.dumps(plan), encoding="utf-8")
     with pytest.raises(ValueError, match="overlaps/gaps"):
         mod.prepare(src, tmp_path / "pack")
+
+def test_muse_dedicated_route_and_price_quote_not_generic_studio():
+    assert mod.MUSE_URL == "https://snapgen.ai/app/video-gen/muse"
+    with pytest.raises(RuntimeError, match="zero-credit quote"):
+        mod.validate_zero_price("0 Credits per video", selected_model="Muse AI Video",
+                                resolution="720p", aspect="9:16", seconds=6)
+
+
+def test_remote_qa_forbid_same_mp4_reused_for_all_scenes(tmp_path, monkeypatch):
+    pack = tmp_path / "pack"
+    mod.prepare(SRC / "docs/tv_comparison_8_scenes.json", pack)
+    pack.joinpath("qa", "remote_semantic_report.json").write_text(
+        json.dumps({"scenes": [{"scene_id": f"scene_{i:02d}", "source_sha256": "identical"}
+                               for i in range(1, 9)]}))
+    def fake_inspect(pack, ffprobe="ffprobe"):
+        return {"scenes": [{"scene_id": f"scene_{i:02d}",
+                             "technical_status": "PASS",
+                             "probe": {"sha256": "identical"}} for i in range(1, 9)]}
+    monkeypatch.setattr(mod, "inspect", fake_inspect)
+    with pytest.raises(RuntimeError, match="Repeated source video"):
+        mod.check_remote_evidence(pack)
+
+
+def test_reference_is_hashed_and_tampering_blocks_video_qa(tmp_path):
+    plan = SRC / "docs/tv_comparison_8_scenes.json"
+    root = tmp_path / "muse"
+    (root / "references").mkdir(parents=True)
+    for name in ("authentic_tv_menu.png", "authentic_tv_ports.png",
+                 "authentic_connection_diagram.png", "authentic_model_comparison.png"):
+        (root / "references" / name).write_bytes(b"initial-test-reference")
+    result = mod.prepare(plan, root)
+    assert not any(x["generation_blocker"] for x in result["scenes"])
+    assert result["scenes"][3]["reference_sha256"]
+    (root / "references" / "authentic_tv_menu.png").write_bytes(b"tampered")
+    report = mod.inspect(root)
+    scene4 = report["scenes"][3]
+    assert scene4["technical_status"] == "FAIL"
+    assert "Reference modified since scene plan creation" in scene4["problems"]
+
+
+def test_reference_path_cannot_escape_references_folder(tmp_path):
+    obj = json.loads((SRC / "docs/tv_comparison_8_scenes.json").read_text())
+    obj["scenes"][3]["reference_file"] = "../private.png"
+    p = tmp_path / "plan.json"
+    p.write_text(json.dumps(obj), encoding="utf8")
+    with pytest.raises(ValueError, match="safe path"):
+        mod.prepare(p, tmp_path / "pack")

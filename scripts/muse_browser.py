@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from providers.video.snapgen_muse import SITE, BLOCKED, validate_zero_price, sha256
+from providers.video.snapgen_muse import SITE, MUSE_URL, BLOCKED, validate_zero_price, sha256
 
 
 def selected_model_controls(page) -> list[str]:
@@ -101,12 +101,16 @@ def run(pack_path: Path, scene_id: str, generate: bool, *, headless: bool = Fals
             viewport={"width": 1366, "height": 900})
         try:
             page = context.pages[0] if context.pages else context.new_page()
-            page.goto(SITE.rstrip("/") + "/studio/", wait_until="domcontentloaded", timeout=45000)
+            page.goto(MUSE_URL, wait_until="domcontentloaded", timeout=45000)
             # No automatic clicking through login, consent, billing or unknown menu.
             # A separate --setup command handles manual authorization.
             page.wait_for_timeout(2500)
-            if not page.url.startswith(SITE):
+            from urllib.parse import urlparse
+            current = urlparse(page.url)
+            if current.scheme != "https" or current.hostname != "snapgen.ai":
                 raise RuntimeError("Browser left trusted SnapGen origin")
+            if not current.path.startswith("/app/video-gen/muse"):
+                raise RuntimeError("Muse generator route unavailable/redirected; do not use generic Studio")
             editor = get_prompt_field(page)
             editor.fill(text)
             page.wait_for_timeout(400)
@@ -145,7 +149,7 @@ def run(pack_path: Path, scene_id: str, generate: bool, *, headless: bool = Fals
                     if BLOCKED.search(page.locator("body").inner_text(timeout=4000)):
                         receipt["status"] = "BLOCKED_BY_FREE_ACCESS_NOTICE"
                     else:
-                        receipt["status"] = "SUBMITTED_AWAITING_MP4"
+                        receipt["status"] = "CLICKED_UNVERIFIED_NO_MP4"
                 except Exception as exc:
                     receipt["status"] = "UNKNOWN_OUTCOME_DO_NOT_RETRY"
                     receipt["error_type"] = type(exc).__name__

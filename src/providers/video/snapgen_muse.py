@@ -21,12 +21,14 @@ from pathlib import Path
 from typing import Any
 
 SITE = "https://snapgen.ai/"
+# This is the dedicated Muse page; generic Studio mostly lists Veo/Grok.
+MUSE_URL = "https://snapgen.ai/app/video-gen/muse"
 VALID_DURATIONS = {4, 6, 8}
 VALID_RESOLUTIONS = {"720p", "1080p"}
 MIN_NATIVE_FPS = 24.0
 MIN_NATIVE_SIZE = (720, 1280)
 MIN_VIDEO_BITRATE = 500_000
-PRICE = re.compile(r"(?:this\s+generation\s+will\s+cost\s*:?\s*)?(\d+(?:[.,]\d+)?)\s*credits\s*per\s*video", re.I)
+PRICE = re.compile(r"\bthis\s+generation\s+will\s+cost\s*:?\s*(\d+(?:[.,]\d+)?)\s*credits\s+per\s+video\b", re.I)
 BLOCKED = re.compile(r"temporarily\s+unavailable\s+for\s+free|only\s+for\s+premium|subscribe\s+to\s+generate|upgrade\s+to\s+(?:generate|continue)|model\s+maintenance", re.I)
 
 
@@ -100,9 +102,13 @@ def prepare(plan_path: Path, pack_path: Path) -> dict:
         # apps, port labels, meaningful image comparison, or model specifications.
         needs_real_reference = bool(scene.get("requires_verified_reference"))
         reference = str(scene.get("reference_file") or "").strip()
-        if reference and (".." in Path(reference).parts or Path(reference).is_absolute()):
-            raise ValueError("Reference path must be relative within the pack")
-        if needs_real_reference and (not reference or not (base / reference).is_file()):
+        if reference and (
+                ".." in Path(reference).parts or Path(reference).is_absolute()
+                or Path(reference).parts[:1] != ("references",)
+                or Path(reference).suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp"}):
+            raise ValueError("Reference must be a safe path within references/")
+        real_reference = (base / reference) if reference else None
+        if needs_real_reference and (not real_reference or not real_reference.is_file()):
             # Preparation is still useful. Mark generation blocked instead of
             # hallucinating UI labels and product port details.
             block = "REQUIRES_AUTHENTIC_PRODUCT_REFERENCE"
@@ -128,6 +134,7 @@ def prepare(plan_path: Path, pack_path: Path) -> dict:
                        "must_show": must_show, "forbidden": scene.get("forbidden") or [],
                        "requires_verified_reference": needs_real_reference,
                        "reference_file": reference or None,
+                       "reference_sha256": sha256(real_reference) if real_reference and real_reference.is_file() else None,
                        "generation_blocker": block,
                        "prompt_file": f"prompts/{sid}.txt",
                        "import_file": f"imports/{sid}.mp4"})
@@ -195,8 +202,12 @@ def inspect(pack: Path, ffprobe: str = "ffprobe") -> dict:
         stats = None
         if row["generation_blocker"]:
             reasons.append(row["generation_blocker"])
-        if row["requires_verified_reference"] and not (root / str(row["reference_file"] or "")).is_file():
-            reasons.append("Verified product/menu/ports reference missing")
+        if row["requires_verified_reference"]:
+            ref_path = root / str(row["reference_file"] or "")
+            if not ref_path.is_file():
+                reasons.append("Verified product/menu/ports reference missing")
+            elif sha256(ref_path) != row.get("reference_sha256"):
+                reasons.append("Reference modified since scene plan creation")
         try:
             stats = probe_video(source, ffprobe)
             reasons.extend(quality_gate(stats, int(row["seconds"])))
@@ -227,7 +238,15 @@ def check_remote_evidence(pack: Path) -> dict:
     if not evid.is_file():
         raise RuntimeError("Remote content QA has not inspected the actual clips")
     data = json.loads(evid.read_text(encoding="utf-8"))
-    lookup = {x["scene_id"]: x for x in data.get("scenes", [])}
+    proofs = data.get("scenes", [])
+    if not isinstance(proofs, list) or len(proofs) != len(media_qa["scenes"]):
+        raise RuntimeError("Remote QA must contain one proof for each source MP4")
+    lookup = {x["scene_id"]: x for x in proofs}
+    if len(lookup) != len(proofs):
+        raise RuntimeError("Remote QA duplicate scene identities")
+    hashes = [s["probe"]["sha256"] for s in media_qa["scenes"]]
+    if len(set(hashes)) != len(hashes):
+        raise RuntimeError("Repeated source video: scenes must be visually independent")
     required = ("shows_must_show", "real_subject_motion", "product_identity_preserved",
                 "visible_watermark_absent", "unrelated_action_absent", "accurate_real_menu_ports")
     for row in media_qa["scenes"]:

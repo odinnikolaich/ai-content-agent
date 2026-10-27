@@ -174,6 +174,31 @@ def probe_video(path: Path, ffprobe: str = "ffprobe") -> dict:
             "bps": bps, "bytes": file.stat().st_size, "sha256": sha256(file)}
 
 
+def temporal_motion_score(source: Path, *, seconds: float, ffmpeg: str = "ffmpeg") -> float:
+    """Cheap frame-difference test, NOT independent subject-motion proof.
+
+    Three 96x170 grayscale frames use negligible RAM on a low-power CPU.
+    Static slides fail. Camera zoom may still pass, so independent remote
+    semantic Video QA is required.
+    """
+    if seconds < 3.5:
+        raise RuntimeError("Video too short for temporal motion test")
+    timestamps = (.50, seconds * .47, max(1.0, seconds - .65))
+    frames = []
+    for at in timestamps:
+        p = subprocess.run([ffmpeg, "-hide_banner", "-loglevel", "error",
+                            "-ss", f"{at:.3f}", "-i", str(source),
+                            "-frames:v", "1", "-vf", "scale=96:170,format=gray",
+                            "-f", "rawvideo", "-"], capture_output=True, timeout=30)
+        if p.returncode or len(p.stdout) != 96 * 170:
+            raise RuntimeError("Cannot decode actual temporal frames")
+        frames.append(p.stdout)
+    def delta(a: bytes, b: bytes) -> float:
+        return sum(abs(x - y) for x, y in zip(a, b)) / len(a)
+    return round(max(delta(frames[0], frames[1]),
+                     delta(frames[1], frames[2])), 3)
+
+
 def quality_gate(stats: dict, expected_duration: int) -> list[str]:
     problems = []
     w, h = stats["width"], stats["height"]
@@ -211,6 +236,14 @@ def inspect(pack: Path, ffprobe: str = "ffprobe") -> dict:
         try:
             stats = probe_video(source, ffprobe)
             reasons.extend(quality_gate(stats, int(row["seconds"])))
+            if not reasons:
+                try:
+                    stats["temporal_frame_change"] = temporal_motion_score(
+                        source, seconds=min(stats["duration"], float(row["seconds"])))
+                    if stats["temporal_frame_change"] < 1.5:
+                        reasons.append("Scene looks static/frozen across sampled frames")
+                except (OSError, RuntimeError, ValueError) as err:
+                    reasons.append("Temporal frame check failed: " + str(err))
         except (OSError, RuntimeError, ValueError, KeyError) as exc:
             reasons.append(str(exc))
         # Syntactic media checks do not confirm correct product, action or

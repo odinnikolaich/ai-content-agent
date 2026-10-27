@@ -120,3 +120,16 @@ def test_reference_path_cannot_escape_references_folder(tmp_path):
     p.write_text(json.dumps(obj), encoding="utf8")
     with pytest.raises(ValueError, match="safe path"):
         mod.prepare(p, tmp_path / "pack")
+
+
+def test_temporal_motion_measure_rejects_static_25fps_frames(monkeypatch, tmp_path):
+    class Proc:
+        returncode = 0
+        def __init__(self, value):
+            self.stdout = bytes([value]) * (96 * 170)
+    counter = iter([Proc(80), Proc(80), Proc(80)])
+    monkeypatch.setattr(mod.subprocess, "run", lambda *a, **kw: next(counter))
+    assert mod.temporal_motion_score(tmp_path / "static.mp4", seconds=6) == 0
+    counter = iter([Proc(80), Proc(95), Proc(120)])
+    monkeypatch.setattr(mod.subprocess, "run", lambda *a, **kw: next(counter))
+    assert mod.temporal_motion_score(tmp_path / "moving.mp4", seconds=6) == 25
